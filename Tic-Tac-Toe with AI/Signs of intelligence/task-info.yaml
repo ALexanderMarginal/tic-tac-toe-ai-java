@@ -1,0 +1,424 @@
+type: edu
+custom_name: stage4
+files:
+- name: src/tictactoe/Main.java
+  visible: true
+  text: |
+    package tictactoe;
+
+    public class Main {
+        public static void main(String[] args) {
+            // write your code here
+        }
+    }
+  learner_created: false
+- name: test/TicTacToeTest.java
+  visible: false
+  text: |
+    import org.hyperskill.hstest.exception.outcomes.WrongAnswer;
+    import org.hyperskill.hstest.stage.StageTest;
+    import org.hyperskill.hstest.testcase.CheckResult;
+    import org.hyperskill.hstest.testcase.TestCase;
+    import tictactoe.Main;
+
+    import java.util.ArrayList;
+    import java.util.List;
+    import java.util.stream.Collectors;
+
+    enum FieldState {
+        X, O, FREE;
+
+        static FieldState get(char symbol) {
+            switch (symbol) {
+                case 'X': return X;
+                case 'O': return O;
+                case ' ':
+                case '_':
+                    return FREE;
+                default: return null;
+            }
+        }
+    }
+
+    class TicTacToeField {
+
+        final FieldState[][] field;
+
+        TicTacToeField(FieldState[][] field) {
+            this.field = field;
+        }
+
+        boolean equalTo(TicTacToeField other) {
+            for (int i = 0; i < 3; i++) {
+                for (int j = 0; j < 3; j++) {
+                    if (field[i][j] != other.field[i][j]) {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        boolean hasNextAs(TicTacToeField other) {
+            boolean improved = false;
+            for (int i = 0; i < 3; i++) {
+                for (int j = 0; j < 3; j++) {
+                    if (field[i][j] != other.field[i][j]) {
+                        if (field[i][j] == FieldState.FREE && !improved) {
+                            improved = true;
+                        }
+                        else {
+                            return false;
+                        }
+                    }
+                }
+            }
+            return improved;
+        }
+
+        boolean isCloseTo(TicTacToeField other) {
+            return equalTo(other)
+                || hasNextAs(other)
+                || other.hasNextAs(this);
+        }
+
+        static TicTacToeField parse(String fieldStr) {
+
+            try {
+                List<String> lines = fieldStr
+                    .lines()
+                    .map(String::strip)
+                    .filter(e ->
+                        e.startsWith("|")
+                            && e.endsWith("|"))
+                    .collect(Collectors.toList());
+
+                for (String line : lines) {
+                    if (line.length() != 9) {
+                        throw new WrongAnswer("Line of Tic-Tac-Toe " +
+                            "field should be 9 characters long\n" +
+                            "found " + line.length() + " characters in \"" + line + "\"");
+                    }
+                    for (char c : line.toCharArray()) {
+                        if (c != 'X'
+                            && c != 'O'
+                            && c != '|'
+                            && c != ' '
+                            && c != '_') {
+                            return null;
+                        }
+                    }
+                }
+
+                FieldState[][] field = new FieldState[3][3];
+
+                int y = 2;
+                for (String line : lines) {
+                    char[] cols = new char[] {
+                        line.charAt(2),
+                        line.charAt(4),
+                        line.charAt(6)
+                    };
+
+                    int x = 0;
+                    for (char c : cols) {
+                        FieldState state = FieldState.get(c);
+                        if (state == null) {
+                            return null;
+                        }
+                        field[y][x] = state;
+                        x++;
+                    }
+                    y--;
+                }
+
+                return new TicTacToeField(field);
+            } catch (Exception ex) {
+                return null;
+            }
+        }
+
+
+        static List<TicTacToeField> parseAll(String output) {
+            List<TicTacToeField> fields = new ArrayList<>();
+
+            List<String> lines = output
+                .lines()
+                .map(String::strip)
+                .filter(e -> e.length() > 0)
+                .collect(Collectors.toList());
+
+            String candidateField = "";
+            boolean insideField = false;
+            for (String line : lines) {
+                if (line.contains("----") && !insideField) {
+                    insideField = true;
+                    candidateField = "";
+                } else if (line.contains("----") && insideField) {
+                    TicTacToeField field = TicTacToeField.parse(candidateField);
+                    if (field != null) {
+                        fields.add(field);
+                    }
+                    insideField = false;
+                }
+
+                if (insideField && line.startsWith("|")) {
+                    candidateField += line + "\n";
+                }
+            }
+
+            return fields;
+        }
+
+    }
+
+
+    class Clue {
+        int x, y;
+        Clue(int x, int y) {
+            this.x = x;
+            this.y = y;
+        }
+    }
+
+    public class TicTacToeTest extends StageTest<Clue> {
+        public TicTacToeTest() throws Exception {
+            super(Main.class);
+        }
+
+        static String[] inputs = new String[] {
+            "1 1", "1 2", "1 3",
+            "2 1", "2 2", "2 3",
+            "3 1", "3 2", "3 3"
+        };
+
+        String iterateCells(String initial) {
+            int index = -1;
+            for (int i = 0; i < inputs.length; i++) {
+                if (initial.equals(inputs[i])) {
+                    index = i;
+                    break;
+                }
+            }
+            if (index == -1) {
+                return "";
+            }
+            String fullInput = "";
+            for (int i = index; i < index + 9; i++) {
+                fullInput += inputs[i % inputs.length] + "\n";
+            }
+            return fullInput;
+        }
+
+        @Override
+        public List<TestCase<Clue>> generate() {
+
+            List<TestCase<Clue>> tests = new ArrayList<>();
+
+            int i = 0;
+            for (String input : inputs) {
+                String fullMoveInput = iterateCells(input);
+
+                String[] strNums = input.split(" ");
+                int x = Integer.parseInt(strNums[0]);
+                int y = Integer.parseInt(strNums[1]);
+
+                if (i % 2 == 1) {
+                    // mix with incorrect data
+                    fullMoveInput = "4 " + i + "\n" + fullMoveInput;
+                }
+
+                String fullGameInput = "";
+                for (int j = 0; j < 9; j++) {
+                    fullGameInput += fullMoveInput;
+                }
+
+                String initial;
+
+                switch (i % 4) {
+                    case 0: initial = "start user easy\n"; break;
+                    case 1: initial = "start easy user\n"; break;
+                    case 2: initial = "start user medium\n"; break;
+                    case 3: initial = "start medium user\n"; break;
+                    default: continue;
+                }
+
+                fullGameInput = initial + fullGameInput + "exit";
+
+                tests.add(new TestCase<Clue>()
+                    .setInput(fullGameInput));
+
+                i++;
+            }
+
+            tests.add(new TestCase<Clue>()
+                .setInput("start easy easy\nexit"));
+
+            tests.add(new TestCase<Clue>()
+                .setInput("start medium medium\nexit"));
+
+            tests.add(new TestCase<Clue>()
+                .setInput("start medium easy\nexit"));
+
+            tests.add(new TestCase<Clue>()
+                .setInput("start easy medium\nexit"));
+
+            tests.add(new TestCase<Clue>()
+                .setInput("start user user\n" +
+                    "1 1\n" +
+                    "2 2\n" +
+                    "1 2\n" +
+                    "2 1\n" +
+                    "1 3\n" +
+                    "exit"));
+
+            return tests;
+        }
+
+        @Override
+        public CheckResult check(String reply, Clue clue) {
+
+            List<TicTacToeField> fields = TicTacToeField.parseAll(reply);
+
+            if (fields.size() == 0) {
+                return new CheckResult(false, "No fields found");
+            }
+
+            for (int i = 1; i < fields.size(); i++) {
+                TicTacToeField curr = fields.get(i - 1);
+                TicTacToeField next = fields.get(i);
+
+                if (!(curr.equalTo(next) || curr.hasNextAs(next))) {
+                    return new CheckResult(false,
+                        "For two fields following each " +
+                            "other one is not a continuation " +
+                            "of the other (they differ more than in two places).");
+                }
+            }
+
+            return CheckResult.correct();
+        }
+    }
+  learner_created: false
+- name: src/tictactoe/Board.java
+  visible: true
+  text: "package tictactoe;\n\nimport java.util.*;\n\npublic class Board {\n    private\
+    \ Scanner scanner = new Scanner(System.in);\n    enum LABEL {\n        X,\n  \
+    \      O,\n        NULL,\n    }\n    private Map<String, LABEL> labelMap = Map.of(\"\
+    X\", LABEL.X, \"O\", LABEL.O, \"_\", LABEL.NULL);\n\n    private final int SIZE\
+    \ = 3;\n\n    private final LABEL[][] board = new LABEL[this.SIZE][this.SIZE];\n\
+    \    // private final Map<LABEL, Integer> initialState = new HashMap<>();\n\n\
+    \    public Board() {\n        for (LABEL[] labels : this.board) {\n         \
+    \   Arrays.fill(labels, LABEL.NULL);\n        }\n    }\n    \n    public void\
+    \ print() {\n        System.out.println(\"---------\");\n        for (LABEL[]\
+    \ labels : this.board) {\n            System.out.print(\"| \");\n            for\
+    \ (LABEL label : labels) {\n                System.out.printf(\"%s \", label.equals(LABEL.NULL)\
+    \ ? \"_\" : label);\n            }\n            System.out.print(\"|\\n\");\n\
+    \        }\n        System.out.println(\"---------\");\n    }\n\n    public void\
+    \ enterCells() {\n        System.out.print(\"Enter cells: \");\n        String[]\
+    \ input = this.scanner.nextLine().split(\"\");\n        int counter = 0;\n   \
+    \     for (LABEL[] labels : this.board) {\n            for (int i = 0; i < labels.length;\
+    \ i++) {\n                LABEL label = labelMap.get(input[counter]);\n      \
+    \          labels[i] = label;\n                /*if (this.initialState.containsKey(label))\
+    \ {\n                    this.initialState.put(label, this.initialState.get(label)\
+    \ + 1);\n                } else {\n                    this.initialState.put(label,\
+    \ 1);\n                }*/\n                counter++;\n            }\n      \
+    \  }\n        System.out.print(\"\\n\");\n        this.print();\n    }\n\n   \
+    \ public void playerMove(Game.players player) {\n        int[] input = new int[2];\n\
+    \n        String[] inputString = this.scanner.nextLine().split(\" \");\n     \
+    \   for (int i = 0; i < inputString.length; i++) {\n            input[i] = Integer.parseInt(inputString[i]);\n\
+    \        }\n\n        int line, col;\n\n        try {\n            line = this.SIZE\
+    \ - input[1];\n            col = input[0] - 1;\n        } catch (Exception e)\
+    \ {\n            System.out.println(\"You should enter numbers!\");\n        \
+    \    this.playerMove(player);\n            return;\n        }\n\n        if (line\
+    \ < 0 || line >= this.SIZE || col < 0 || col >= this.SIZE) {\n            System.out.println(\"\
+    Coordinates should be from 1 to 3!\");\n            this.playerMove(player);\n\
+    \            return;\n        }\n\n        if (!this.board[line][col].equals(LABEL.NULL))\
+    \ {\n            System.out.println(\"This cell is occupied! Choose another one!\"\
+    );\n            this.playerMove(player);\n            return;\n        }\n\n \
+    \       this.board[line][col] = LABEL.valueOf(player.toString());\n        this.print();\n\
+    \    }\n\n    /*public Map<LABEL, Integer> getInitialState() {\n        return\
+    \ initialState;\n    }*/\n\n    public void randomMove(Game.players player) {\n\
+    \        int[] move = getRandomMove();\n        this.board[move[0]][move[1]] =\
+    \ LABEL.valueOf(player.toString());\n        this.print();;\n    }\n\n    private\
+    \ int[] getRandomMove() {\n        ArrayList<int[]> acceptedMoves = new ArrayList<>();\n\
+    \        for (int i = 0; i < this.board.length; i++) {\n            for (int i1\
+    \ = 0; i1 < this.board[i].length; i1++) {\n                if (this.board[i][i1].equals(LABEL.NULL))\
+    \ {\n                    acceptedMoves.add(new int[] {i, i1});\n             \
+    \   }\n            }\n        }\n        return acceptedMoves.get(this.getRandomNumber(acceptedMoves.size()\
+    \ - 1));\n    }\n\n    private int getRandomNumber(int end) {\n        return\
+    \ (int) (Math.random() * end);\n    }\n\n    public int getSIZE() {\n        return\
+    \ SIZE;\n    }\n\n    public LABEL[][] getBoard() {\n        return this.board;\n\
+    \    }\n}\n"
+  learner_created: true
+- name: src/tictactoe/Game.java
+  visible: true
+  text: "package tictactoe;\n\nimport java.util.HashMap;\nimport java.util.Map;\n\
+    import java.util.Objects;\nimport java.util.Scanner;\n\npublic class Game {\n\
+    \    Board board = new Board();\n\n    enum players {\n        X,\n        O,\n\
+    \    }\n\n    enum PlayerTypes {\n        user,\n        easy,\n        \n   \
+    \ }\n\n    private final Map<players, PlayerTypes> playersMap = new HashMap<>();\n\
+    \n    private players currentPlayer = players.X;\n\n    public Game() {\n    \
+    \    // board.enterCells();\n        // Map<Board.LABEL, Integer> initialState\
+    \ = board.getInitialState();\n        /*if (initialState.containsKey(Board.LABEL.X)\
+    \ && initialState.containsKey(Board.LABEL.O)) {\n            currentPlayer = initialState.get(Board.LABEL.X)\
+    \ > initialState.get(Board.LABEL.O) ? players.O : players.X;\n        } else {\n\
+    \            currentPlayer = players.X;\n        }*/\n        start();\n    }\n\
+    \n    private void start() {\n        Scanner sc = new Scanner(System.in);\n \
+    \       System.out.print(\"Input command: \");\n        String[] cmd = sc.nextLine().split(\"\
+    \ \");\n        String action = cmd[0];\n        if (action.equals(\"start\")\
+    \ && cmd.length == 3) {\n            this.setup(cmd[1], cmd[2]);\n        }\n\
+    \        if (action.equals(\"exit\")) {\n            System.exit(0);\n       \
+    \ }\n        System.out.println(\"Bad parameters!\");\n        start();\n    }\n\
+    \n    private void setup(String player1, String player2) {\n        playersMap.put(players.X,\
+    \ PlayerTypes.valueOf(player1));\n        playersMap.put(players.O, PlayerTypes.valueOf(player2));\n\
+    \        step();\n    }\n\n    private void step() {\n        switch (playersMap.get(currentPlayer))\
+    \ {\n            case easy:\n                System.out.println(\"Making move\
+    \ level \\\"easy\\\"\");\n                board.randomMove(currentPlayer);\n \
+    \               break;\n                ca\n        }\n        if (playersMap.get(currentPlayer).equals(PlayerTypes.user))\
+    \ {\n            System.out.print(\"Enter the coordinates: \");\n            board.playerMove(currentPlayer);\n\
+    \        } else {\n            System.out.println(\"Making move level \\\"easy\\\
+    \"\");\n            board.randomMove(currentPlayer);\n        }\n        this.checkGameStatus();\n\
+    \    }\n\n    private Map<players, Boolean> checkForWin() {\n        Map<players,\
+    \ Boolean> win = new java.util.HashMap<>(Map.of(players.X, false, players.O, false));\n\
+    \n        int size = this.board.getSIZE();\n        Board.LABEL[][] fields = this.board.getBoard();\n\
+    \        //loops through rows checking if win-condition exists\n        for (int\
+    \ r = 0; r < size; r++) {\n            if (fields[r][0].equals(fields[r][1]) &&\
+    \ fields[r][1].equals(fields[r][2]) && !Board.LABEL.NULL.equals(fields[r][0]))\
+    \ {\n                win.put(players.valueOf(fields[r][0].toString()), true);\n\
+    \            }\n        }\n        //loops through columns checking if win-condition\
+    \ exists\n        for (int c = 0; c < 3; c++) {\n            if (Objects.equals(fields[0][c],\
+    \ fields[1][c]) && Objects.equals(fields[1][c], fields[2][c]) && !Board.LABEL.NULL.equals(fields[0][c]))\
+    \ {\n                win.put(players.valueOf(fields[0][c].toString()), true);\n\
+    \            }\n        }\n        //checks diagonals for win-condition\n    \
+    \    if (Objects.equals(fields[0][0], fields[1][1]) && Objects.equals(fields[1][1],\
+    \ fields[2][2]) && !Board.LABEL.NULL.equals(fields[0][0])) {\n            win.put(players.valueOf(fields[0][0].toString()),\
+    \ true);\n        }\n\n        if (fields[0][2].equals(fields[1][1]) && fields[1][1].equals(fields[2][0])\
+    \ && !Board.LABEL.NULL.equals(fields[0][2])) {\n            win.put(players.valueOf(fields[0][2].toString()),\
+    \ true);\n        }\n\n        return win;\n    }\n\n    private void checkGameStatus()\
+    \ {\n        Map<players, Boolean> winners = this.checkForWin();\n\n        if\
+    \ (winners.get(players.X) && winners.get(players.O)) {\n            System.out.println(\"\
+    Impossible\");\n            return;\n        }\n        if (winners.get(players.X)\
+    \ || winners.get(players.O)) {\n            players winPlayer = winners.get(players.X)\
+    \ ? players.X : players.O;\n            System.out.println(winPlayer + \" wins\"\
+    );\n            return;\n        }\n\n        Board.LABEL[][] fields = this.board.getBoard();\n\
+    \        int countX = 0;\n        int countO = 0;\n        int countEmpty = 0;\n\
+    \n        for (Board.LABEL[] line :\n                fields) {\n            for\
+    \ (Board.LABEL cell :\n                    line) {\n                if (cell.equals(Board.LABEL.X))\
+    \ {\n                    countX++;\n                    continue;\n          \
+    \      }\n                if (cell.equals(Board.LABEL.O)) {\n                \
+    \    countO++;\n                    continue;\n                }\n           \
+    \     countEmpty++;\n            }\n        }\n\n        /*if (Math.abs(countX\
+    \ - countO) >= 2) {\n            System.out.println(\"Impossible\");\n       \
+    \     return;\n        }*/\n\n        if (countEmpty == 0) {\n            System.out.println(\"\
+    Draw\");\n            return;\n        }\n\n        // System.out.println(\"Game\
+    \ not finished\");\n        currentPlayer = currentPlayer.equals(players.O) ?\
+    \ players.X : players.O;\n        this.step();\n    }\n}\n"
+  learner_created: true
+feedback_link: https://hyperskill.org/projects/81/stages/450/implement#comment
+status: Solved
+feedback:
+  message: Congratulations! Continue on <a href="https://hyperskill.org/projects/81/stages/450/implement">JetBrains
+    Academy</a>
+  time: Mon, 02 Nov 2020 05:10:11 UTC
+record: 4
